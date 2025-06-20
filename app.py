@@ -1,29 +1,24 @@
 import logging
 import time
 from flask import Flask
-from ddtrace import patch
+from ddtrace import tracer
 
-# 自動パッチ（Flask, logging 含む）
-patch(logging=True)
-
-# ロガー設定（Datadog の trace_id / span_id を埋め込む形式）
+# ロガー設定（フォーマットのみ）
+FORMAT = ('%(asctime)s %(levelname)s [%(name)s] '
+          '[dd.trace_id=%(dd.trace_id)s dd.span_id=%(dd.span_id)s] '
+          '- %(message)s')
+logging.basicConfig(format=FORMAT, level=logging.INFO)
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)
-
-handler = logging.StreamHandler()
-formatter = logging.Formatter(
-    '%(asctime)s [dd.trace_id=%(dd.trace_id)s dd.span_id=%(dd.span_id)s] %(levelname)s - %(message)s'
-)
-handler.setFormatter(formatter)
-logger.addHandler(handler)
 
 app = Flask(__name__)
 
 @app.route("/")
+@tracer.wrap()
 def index():
     logger.info("Accessing index page")
     return "welcome demo env!!"
 
+@tracer.wrap()
 def memory(percentage):
     size_mb = int((percentage / 100) * 1024)
     logger.info(f"Allocating {size_mb} MB of memory")
@@ -31,6 +26,7 @@ def memory(percentage):
     time.sleep(4)
     logger.info("Memory allocation complete")
 
+@tracer.wrap()
 def cpu(percentage):
     duration = 4
     end_time = time.time() + duration
@@ -41,18 +37,21 @@ def cpu(percentage):
     logger.info("CPU load complete")
 
 @app.route("/memory")
+@tracer.wrap()
 def memory_half():
     memory(50)
     logger.info("Memory usage increased to 50%")
     return "Memory usage increased to 50%"
 
 @app.route("/memoryall")
+@tracer.wrap()
 def memory_full():
     memory(100)
     logger.info("Memory usage increased to 100%")
     return "Memory usage increased to 100%"
 
 @app.route("/cpu")
+@tracer.wrap()
 def cpu_load():
     cpu(90)
     logger.info("CPU usage increased to 90%")
