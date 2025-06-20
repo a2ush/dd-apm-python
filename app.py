@@ -1,29 +1,44 @@
 import logging
 import time
 import json
-from flask import Flask
-from ddtrace import tracer
+from flask import Flask, request
+from ddtrace import tracer, patch
 
+# ✅ Inject trace context into logs
+patch(logging=True)
+
+# ✅ JSON log formatter for Datadog
 class DatadogJSONFormatter(logging.Formatter):
     def format(self, record):
-        span = tracer.current_span()
         log_record = {
             "timestamp": self.formatTime(record, self.datefmt),
             "level": record.levelname,
+            "logger": record.name,
             "message": record.getMessage(),
         }
-        if span:
-            log_record["dd.trace_id"] = span.trace_id
-            log_record["dd.span_id"] = span.span_id
+        if hasattr(record, "dd.trace_id"):
+            log_record["dd.trace_id"] = getattr(record, "dd.trace_id", None)
+        if hasattr(record, "dd.span_id"):
+            log_record["dd.span_id"] = getattr(record, "dd.span_id", None)
         return json.dumps(log_record)
 
+# ✅ Configure logger
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 handler = logging.StreamHandler()
 handler.setFormatter(DatadogJSONFormatter())
 logger.addHandler(handler)
 
+# ✅ Disable default Werkzeug access logs
+logging.getLogger("werkzeug").setLevel(logging.ERROR)
+
+# ✅ Flask app
 app = Flask(__name__)
+
+# ✅ Custom access logging (Datadog-trace-aware)
+@app.before_request
+def log_access():
+    logger.info(f"Access log: {request.method} {request.path} from {request.remote_addr}")
 
 @app.route("/")
 @tracer.wrap()
