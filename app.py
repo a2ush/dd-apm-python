@@ -1,14 +1,27 @@
 import logging
 import time
+import json
 from flask import Flask
 from ddtrace import tracer
 
-# ロガー設定（フォーマットのみ）
-FORMAT = ('%(asctime)s %(levelname)s [%(name)s] '
-          '[dd.trace_id=%(dd.trace_id)s dd.span_id=%(dd.span_id)s] '
-          '- %(message)s')
-logging.basicConfig(format=FORMAT, level=logging.INFO)
+class DatadogJSONFormatter(logging.Formatter):
+    def format(self, record):
+        span = tracer.current_span()
+        log_record = {
+            "timestamp": self.formatTime(record, self.datefmt),
+            "level": record.levelname,
+            "message": record.getMessage(),
+        }
+        if span:
+            log_record["dd.trace_id"] = span.trace_id
+            log_record["dd.span_id"] = span.span_id
+        return json.dumps(log_record)
+
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+handler = logging.StreamHandler()
+handler.setFormatter(DatadogJSONFormatter())
+logger.addHandler(handler)
 
 app = Flask(__name__)
 
