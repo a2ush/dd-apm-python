@@ -1,10 +1,21 @@
 import logging
-from flask import Flask
 import time
+from flask import Flask
+from ddtrace import patch
 
-# ロガーの設定
-logging.basicConfig(level=logging.INFO)
+# 自動パッチ（Flask, logging 含む）
+patch(logging=True)
+
+# ロガー設定（Datadog の trace_id / span_id を埋め込む形式）
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+
+handler = logging.StreamHandler()
+formatter = logging.Formatter(
+    '%(asctime)s [dd.trace_id=%(dd.trace_id)s dd.span_id=%(dd.span_id)s] %(levelname)s - %(message)s'
+)
+handler.setFormatter(formatter)
+logger.addHandler(handler)
 
 app = Flask(__name__)
 
@@ -49,4 +60,3 @@ def cpu_load():
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000)
-
